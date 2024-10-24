@@ -1,0 +1,6 @@
+[workspace]
+members = [
+	"ffmapi-bindgen-macro",
+	"ffmapi-bindgen",
+]
+resolver = "2"
