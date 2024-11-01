@@ -1,10 +1,9 @@
 [package]
-name = "ffmapi-bindgen"
+name = "ffmapi-bindgen-common"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-ffmapi-bindgen-common = { path = "../ffmapi-bindgen-common" }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
