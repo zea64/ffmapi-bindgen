@@ -110,3 +110,29 @@ pub fn extract_args(input: &ItemFn) -> Result<Vec<RustFnArg>> {
 
 	Ok(args)
 }
+
+use syn::{ItemFn, ReturnType, Type, TypePath, Error};
+
+pub fn extract_return_type(input: &ItemFn) -> Result<Option<RustFnArg>> {
+	match &input.sig.output {
+		ReturnType::Default => Ok(None), // No return type, so return None
+		ReturnType::Type(_, boxed_ty) => {
+			// Unbox the return type
+			let ty = &**boxed_ty;
+			let kind = ArgKind::from_type(ty);
+
+			// If the return type is supported, create a RustFnArg with a placeholder ident
+			match kind {
+				Some(kind) => Ok(Some(RustFnArg {
+					ident: Ident::new("return_value", proc_macro2::Span::call_site()), // Placeholder ident
+					kind,
+					ty: ty.clone(),
+				})),
+				None => Err(Error::new_spanned(
+					ty,
+					"Unsupported return type: only primitives, references, and boxed types are allowed.",
+				)),
+			}
+		}
+	}
+}

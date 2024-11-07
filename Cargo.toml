@@ -2,6 +2,6 @@
 members = [
 	"ffmapi-bindgen-common",
 	"ffmapi-bindgen-macro",
-	"ffmapi-bindgen",
+	"ffmapi-bindgen", "ffmapi-javagen",
 ]
 resolver = "2"

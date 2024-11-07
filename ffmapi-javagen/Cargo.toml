@@ -1,0 +1,21 @@
+[package]
+name = "ffmapi-javagen"
+version = "0.1.0"
+edition = "2021"
+authors = ["Santiago Martinez <santiagoms2003@gmail.com>"]
+description = "A `cargo generate` template for quick-starting a procedural macro crate"
+keywords = ["template", "proc_macro", "procmacro"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+proc-macro2 = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+ffmapi-bindgen-common = { path = "../ffmapi-bindgen-common" }
+
+[build-dependencies]
+syn = { version = "2.0", features = ["full", "extra-traits"] }
