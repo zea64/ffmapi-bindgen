@@ -3,6 +3,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use syn::{ItemFn, FnArg, PatType, Type, TypePath, Path};
 use std::{error::Error, fs};
+use std::collections::HashSet;
 use ffmapi_bindgen_common::*;
 
 fn rust_type_to_value_layout(rust_arg: &RustFnArg) -> (&'static str, &'static str) {
@@ -42,6 +43,8 @@ fn generate_java_code(fn_item: &ItemFn) {
 	let fn_name = fn_item.sig.ident.to_string();
 	let class_name = capitalize_first_letter(&fn_name);
 
+	let mut existing_types: HashSet<&str> = HashSet::new();
+
 	// Extracting arguments
 	let args = extract_args(fn_item).expect("Failed to extract function arguments");
 
@@ -52,6 +55,7 @@ fn generate_java_code(fn_item: &ItemFn) {
 	let mut params = Vec::new();
 	for rust_arg in args.iter() {
 		params.push(rust_type_to_value_layout(rust_arg).1);
+		existing_types.insert(rust_type_to_value_layout(rust_arg).1);
 	}
 
 	// // Prepare static initializer block with MethodHandle setup
@@ -68,6 +72,10 @@ fn generate_java_code(fn_item: &ItemFn) {
 	let return_type = extract_return_type(fn_item).expect("Failed to extract return type");
 
 	let return_type_string = get_return_type_string(Option::from(&return_type));
+
+	existing_types.insert(return_type_string.as_str());
+
+	create_java_files_for_types(&existing_types);
 
 	// let return_type = if let syn::ReturnType::Type(_, return_type) = &fn_item.sig.output {
 	// 	if let Type::Path(type_path) = &**return_type {
@@ -178,6 +186,26 @@ fn generate_java_code(fn_item: &ItemFn) {
 	drop_file
 		.write_all(drop_method_content.as_bytes())
 		.expect("Failed to write drop method");
+}
+
+// Overwrites previously generated files
+fn create_java_files_for_types(types: &HashSet<&str>) {
+	for &type_name in types {
+		// Construct the filename and class content
+		let file_name = format!("./target/generated_code/{}.java", type_name);
+		let class_content = format!("public class R{} {{}}", type_name);
+
+		// Create and write to the file
+		let mut file = OpenOptions::new()
+			.create(true)
+			.write(true)
+			.truncate(true) // Overwrites file content if it exists
+			.open(&file_name)
+			.expect("Unable to create or write to .java file");
+
+		// Write the class content
+		writeln!(file, "{}", class_content).expect("Failed to write to file");
+	}
 }
 
 fn generate_wrapper_class(fn_item: &ItemFn) {
