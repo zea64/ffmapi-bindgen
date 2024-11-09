@@ -4,7 +4,7 @@ use ffmapi_bindgen_common::*;
 use proc_macro::TokenStream as CompilerTokenStream;
 use proc_macro2::*;
 use punctuated::Punctuated;
-use quote::ToTokens;
+use quote::{quote, ToTokens};
 use spanned::Spanned;
 use syn::*;
 
@@ -78,7 +78,7 @@ fn java_export_inner(input: ItemFn) -> Result<TokenStream> {
 
 	// Expressions used to call the real function from the stub
 	let stub_translate_args: Punctuated<Expr, token::Comma> = parsed_args
-		.into_iter()
+		.iter()
 		.map(|arg| {
 			let path_expr = Expr::Path(ExprPath {
 				attrs: Vec::new(),
@@ -86,7 +86,7 @@ fn java_export_inner(input: ItemFn) -> Result<TokenStream> {
 				path: Path {
 					leading_colon: None,
 					segments: iter::once(PathSegment {
-						ident: arg.ident,
+						ident: arg.ident.clone(),
 						arguments: PathArguments::None,
 					})
 					.collect(),
@@ -140,5 +140,21 @@ fn java_export_inner(input: ItemFn) -> Result<TokenStream> {
 
 	let mut stream = new_fn.to_token_stream();
 	stream.extend(input.to_token_stream());
+
+	// Safety checks on arguments.
+	stream.extend(parsed_args.iter().flat_map(|arg| {
+		if arg.kind == ArgKind::Boxed {
+			let ty = &arg.ty;
+			Some(quote! {
+				const _: () = {
+					trait SendPlusSync: Send + Sync {}
+					impl SendPlusSync for #ty {}
+				};
+			})
+		} else {
+			None
+		}
+	}));
+
 	Ok(stream)
 }
