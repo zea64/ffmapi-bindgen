@@ -1,10 +1,10 @@
-
+use ffmapi_bindgen_common::*;
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::Write;
-use syn::{ItemFn, FnArg, PatType, Type, TypePath, Path};
+use std::path::Path as OsPath;
 use std::{error::Error, fs};
-use std::collections::HashSet;
-use ffmapi_bindgen_common::*;
+use syn::{Item, ItemFn, Type};
 
 fn rust_type_to_value_layout(rust_arg: &RustFnArg) -> (&'static str, &'static str) {
 	match rust_arg.kind {
@@ -39,7 +39,7 @@ fn rust_type_to_value_layout(rust_arg: &RustFnArg) -> (&'static str, &'static st
 	}
 }
 
-fn generate_java_code(fn_item: &ItemFn) {
+pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let fn_name = fn_item.sig.ident.to_string();
 	let class_name = capitalize_first_letter(&fn_name);
 
@@ -50,7 +50,10 @@ fn generate_java_code(fn_item: &ItemFn) {
 
 	// Prepare definitions for the MethodHandle
 	let definitions_content = format!("private static final MethodHandle {}Handle;\n", fn_name);
-	let drop_definitions_content = format!("private static final MethodHandle drop{}Handle;\n", class_name);
+	let drop_definitions_content = format!(
+		"private static final MethodHandle drop{}Handle;\n",
+		class_name
+	);
 
 	let mut params = Vec::new();
 	for rust_arg in args.iter() {
@@ -71,7 +74,7 @@ fn generate_java_code(fn_item: &ItemFn) {
 
 	let return_type = extract_return_type(fn_item).expect("Failed to extract return type");
 
-	let return_type_string = get_return_type_string(Option::from(&return_type));
+	let return_type_string = get_return_type_string(Option::from(&return_type))?;
 
 	existing_types.insert(return_type_string.as_str());
 
@@ -91,7 +94,11 @@ fn generate_java_code(fn_item: &ItemFn) {
 	let param_layouts = if params.is_empty() {
 		format!("FunctionDescriptor.of({})", return_type_string)
 	} else {
-		format!("FunctionDescriptor.of({}, {})", return_type_string, params.join(", "))
+		format!(
+			"FunctionDescriptor.of({}, {})",
+			return_type_string,
+			params.join(", ")
+		)
 	};
 
 	// Method handle implementation block
@@ -186,6 +193,8 @@ fn generate_java_code(fn_item: &ItemFn) {
 	drop_file
 		.write_all(drop_method_content.as_bytes())
 		.expect("Failed to write drop method");
+
+	Ok(())
 }
 
 // Overwrites previously generated files
@@ -208,28 +217,18 @@ fn create_java_files_for_types(types: &HashSet<&str>) {
 	}
 }
 
-fn generate_wrapper_class(fn_item: &ItemFn) {
+pub fn generate_wrapper_class(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let fn_name = fn_item.sig.ident.to_string();
 	let class_name = capitalize_first_letter(&fn_name);
 
 	let return_type_arg = extract_return_type(fn_item);
 
 	// Determine the Java type and ValueLayout based on the Rust return type
-	let (java_type, value_layout) = match return_type_arg {
-		Some(ref arg) => {
-			match &arg.kind {
-				ArgKind::Primitive => {
-					let rust_type = primitive_match(&TypePath {
-						qself: None,
-						path: Path::from(arg.ty.clone()),
-					}).unwrap_or("MemorySegment");  // Fallback to `MemorySegment` if no match
-					rust_type_to_value_layout(rust_type)
-				}
-				ArgKind::Boxed | ArgKind::Address => {
-					("MemorySegment", "ValueLayout.ADDRESS")
-				}
-			}
-		}
+	let (java_type, value_layout) = match return_type_arg? {
+		Some(ref arg) => match &arg.kind {
+			ArgKind::Primitive => rust_type_to_value_layout(arg),
+			ArgKind::Boxed | ArgKind::Address => ("MemorySegment", "ValueLayout.ADDRESS"),
+		},
 		None => ("void", ""), // No return type (void)
 	};
 
@@ -280,9 +279,11 @@ public class {class_name} implements AutoCloseable {{
 
 	file.write_all(class_content.as_bytes())
 		.expect("Failed to write Java wrapper class content");
+
+	Ok(())
 }
 
-fn combine_files() -> Result<(), Box<dyn Error>> {
+pub fn combine_files() -> Result<(), Box<dyn Error>> {
 	let output_file = "./target/generated_code/RustFunctions.java";
 	let class_header = r#"
 import java.lang.foreign.ValueLayout;
@@ -310,7 +311,8 @@ public class RustFunctions {
 	output.write_all(definitions_content.as_bytes())?;
 	output.write_all(b"    static {\n        try {\n")?;
 
-	let implementations_content = fs::read_to_string("./target/generated_code/implementations.txt")?;
+	let implementations_content =
+		fs::read_to_string("./target/generated_code/implementations.txt")?;
 	output.write_all(implementations_content.as_bytes())?;
 	output.write_all(b"    } catch (Throwable e) {\n        throw new RuntimeException(\"Failed to initialize Rust function handles\", e);\n    }\n  }\n")?;
 
@@ -330,7 +332,6 @@ public class RustFunctions {
 	Ok(())
 }
 
-
 fn capitalize_first_letter(s: &str) -> String {
 	let mut c = s.chars();
 	match c.next() {
@@ -339,27 +340,69 @@ fn capitalize_first_letter(s: &str) -> String {
 	}
 }
 
-fn get_return_type_string(return_type_arg: Option<&RustFnArg>) -> String {
+fn get_return_type_string(return_type_arg: Option<&RustFnArg>) -> Result<String, Box<dyn Error>> {
 	match return_type_arg {
 		Some(arg) => {
 			match arg.kind {
 				ArgKind::Primitive => {
 					// Use `primitive_match` to get the primitive type as a string
-					primitive_match(&TypePath {
-						qself: None,
-						path: Path::from(arg.ty.clone()),
-					})
-						.unwrap_or("MemorySegment").parse().unwrap() // Fallback if no match
+					let type_path = match arg.ty {
+						Type::Path(ref x) => x,
+						_ => return Err("fixme".into()),
+					};
+					Ok(primitive_match(&type_path)
+						.unwrap_or("MemorySegment")
+						.into())
 				}
 				ArgKind::Boxed | ArgKind::Address => {
 					// For boxed or address types, return a generic representation
-					"MemorySegment".to_string()
+					Ok("MemorySegment".to_string())
 				}
 			}
 		}
-		None => "void".to_string(), // No return type (void)
+		None => Ok("void".to_string()), // No return type (void)
 	}
 }
 
-
 // Java code ends here
+
+pub fn parse_file(file_path: &OsPath) -> Result<(), Box<dyn Error>> {
+	println!("cargo::rerun-if-changed={}", file_path.to_str().unwrap());
+
+	let content = fs::read_to_string(file_path)?;
+	let ast = syn::parse_file(&content)?;
+
+	for item in ast.items {
+		match item {
+			Item::Fn(f) => {
+				if f.attrs
+					.iter()
+					.map(|attr| attr.meta.path())
+					.any(|path| path.segments.first().unwrap().ident == "java_export")
+				{
+					println!("cargo::warning={:?}", f);
+					generate_java_code(&f)?;
+					generate_wrapper_class(&f)?;
+					combine_files()?;
+				}
+			}
+			Item::Mod(m) => {
+				// Try "./${mod}.rs".
+				let mod_file = format!("{}.rs", m.ident);
+				let mut mod_path = file_path.to_path_buf();
+				mod_path.pop();
+				mod_path.push(mod_file);
+				let _ = parse_file(mod_path.as_path());
+
+				// Try "./${mod}/mod.rs".
+				mod_path.pop();
+				mod_path.push(m.ident.to_string());
+				mod_path.push("mod.rs");
+				let _ = parse_file(mod_path.as_path());
+			}
+			_ => (),
+		}
+	}
+
+	Ok(())
+}

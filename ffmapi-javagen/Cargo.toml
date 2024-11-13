@@ -8,9 +8,6 @@ keywords = ["template", "proc_macro", "procmacro"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-proc-macro = true
-
 [dependencies]
 quote = "1"
 proc-macro2 = "1.0"
