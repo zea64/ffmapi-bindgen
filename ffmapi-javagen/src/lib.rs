@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path as OsPath;
 use std::{error::Error, fs};
+use quote::quote;
 use syn::{Item, ItemFn, Type};
 
 fn rust_type_to_value_layout(rust_arg: &RustFnArg) -> (&'static str, &'static str) {
@@ -58,7 +59,7 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let mut params = Vec::new();
 	for rust_arg in args.iter() {
 		params.push(rust_type_to_value_layout(rust_arg).1);
-		existing_types.insert(rust_type_to_value_layout(rust_arg).1);
+		existing_types.insert(get_raw_rust_return_type(Option::from(rust_arg)).clone().as_str());  // Borrow a &str from the String
 	}
 
 	// // Prepare static initializer block with MethodHandle setup
@@ -75,8 +76,11 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let return_type = extract_return_type(fn_item).expect("Failed to extract return type");
 
 	let return_type_string = get_return_type_string(Option::from(&return_type))?;
+	//
+	// existing_types.insert(return_type_string.as_str());
 
-	existing_types.insert(return_type_string.as_str());
+	let binding = get_raw_rust_return_type(Option::from(&return_type.unwrap()));
+	existing_types.insert(&*binding);
 
 	// Generating dummy classes
 	generate_type_classes(existing_types)?;
@@ -271,7 +275,7 @@ pub fn generate_type_classes(types: HashSet<&str>) -> Result<(), Box<dyn Error>>
 	let mut make_file = OpenOptions::new()
 		.create(true)
 		.append(true)
-		.open("./target/generated_code/DummyClasses.java")
+		.open("./target/generated_code/dummy_classes.txt")
 		.expect("Failed to open make file");
 
 	for &data_type in &types {
@@ -283,17 +287,16 @@ pub fn generate_type_classes(types: HashSet<&str>) -> Result<(), Box<dyn Error>>
 }
 
 // Format type string into dummy class string
-pub fn generate_type_class_from_name(name: &str) -> &str {
-	let class_content = format!(
+pub fn generate_type_class_from_name(name: &str) -> String {
+	format!(
 		r#"
 public class R{name} {{
-	MemorySegment value;
+    MemorySegment value;
 }}
 
 "#,
 		name = name
-	);
-	class_content.as_str()
+	)
 }
 
 pub fn combine_files() -> Result<(), Box<dyn Error>> {
@@ -377,6 +380,12 @@ fn get_return_type_string(return_type_arg: Option<&RustFnArg>) -> Result<String,
 	}
 }
 
+fn get_raw_rust_return_type(return_type_arg: Option<&RustFnArg>) -> String {
+	// Ok(quote! { #return_type_arg.ty }.to_string())
+	let tokenstrm = quote! {return_type_arg.unwrap().ty};
+	let res = tokenstrm.to_string();
+	res
+}
 // Java code ends here
 
 pub fn parse_file(file_path: &OsPath) -> Result<(), Box<dyn Error>> {
