@@ -78,7 +78,8 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 
 	existing_types.insert(return_type_string.as_str());
 
-	create_java_files_for_types(&existing_types);
+	// Generating dummy classes
+	generate_type_classes(existing_types)?;
 
 	// let return_type = if let syn::ReturnType::Type(_, return_type) = &fn_item.sig.output {
 	// 	if let Type::Path(type_path) = &**return_type {
@@ -198,24 +199,6 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 }
 
 // Overwrites previously generated files
-fn create_java_files_for_types(types: &HashSet<&str>) {
-	for &type_name in types {
-		// Construct the filename and class content
-		let file_name = format!("./target/generated_code/{}.java", type_name);
-		let class_content = format!("public class R{} {{}}", type_name);
-
-		// Create and write to the file
-		let mut file = OpenOptions::new()
-			.create(true)
-			.write(true)
-			.truncate(true) // Overwrites file content if it exists
-			.open(&file_name)
-			.expect("Unable to create or write to .java file");
-
-		// Write the class content
-		writeln!(file, "{}", class_content).expect("Failed to write to file");
-	}
-}
 
 pub fn generate_wrapper_class(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let fn_name = fn_item.sig.ident.to_string();
@@ -281,6 +264,36 @@ public class {class_name} implements AutoCloseable {{
 		.expect("Failed to write Java wrapper class content");
 
 	Ok(())
+}
+
+// Generate dummy classes
+pub fn generate_type_classes(types: HashSet<&str>) -> Result<(), Box<dyn Error>> {
+	let mut make_file = OpenOptions::new()
+		.create(true)
+		.append(true)
+		.open("./target/generated_code/DummyClasses.java")
+		.expect("Failed to open make file");
+
+	for &data_type in &types {
+		make_file
+			.write_all(generate_type_class_from_name(data_type).as_bytes())
+			.expect("Failed to write make method");
+	}
+	Ok(())
+}
+
+// Format type string into dummy class string
+pub fn generate_type_class_from_name(name: &str) -> &str {
+	let class_content = format!(
+		r#"
+public class R{name} {{
+	MemorySegment value;
+}}
+
+"#,
+		name = name
+	);
+	class_content.as_str()
 }
 
 pub fn combine_files() -> Result<(), Box<dyn Error>> {
