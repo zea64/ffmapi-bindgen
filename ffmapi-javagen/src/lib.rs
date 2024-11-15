@@ -1,10 +1,10 @@
 use ffmapi_bindgen_common::*;
+use quote::quote;
 use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path as OsPath;
 use std::{error::Error, fs};
-use quote::quote;
 use syn::{Item, ItemFn, Type};
 
 fn rust_type_to_value_layout(rust_arg: &RustFnArg) -> (&'static str, &'static str) {
@@ -44,7 +44,7 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let fn_name = fn_item.sig.ident.to_string();
 	let class_name = capitalize_first_letter(&fn_name);
 
-	let mut existing_types: HashSet<&str> = HashSet::new();
+	let mut existing_types: HashSet<String> = HashSet::new();
 
 	// Extracting arguments
 	let args = extract_args(fn_item).expect("Failed to extract function arguments");
@@ -59,7 +59,7 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	let mut params = Vec::new();
 	for rust_arg in args.iter() {
 		params.push(rust_type_to_value_layout(rust_arg).1);
-		existing_types.insert(get_raw_rust_return_type(Option::from(rust_arg)).clone().as_str());  // Borrow a &str from the String
+		existing_types.insert(get_raw_rust_return_type(Option::from(rust_arg))); // Borrow a &str from the String
 	}
 
 	// // Prepare static initializer block with MethodHandle setup
@@ -80,7 +80,7 @@ pub fn generate_java_code(fn_item: &ItemFn) -> Result<(), Box<dyn Error>> {
 	// existing_types.insert(return_type_string.as_str());
 
 	let binding = get_raw_rust_return_type(Option::from(&return_type.unwrap()));
-	existing_types.insert(&*binding);
+	existing_types.insert(binding);
 
 	// Generating dummy classes
 	generate_type_classes(existing_types)?;
@@ -271,14 +271,14 @@ public class {class_name} implements AutoCloseable {{
 }
 
 // Generate dummy classes
-pub fn generate_type_classes(types: HashSet<&str>) -> Result<(), Box<dyn Error>> {
+pub fn generate_type_classes(types: HashSet<String>) -> Result<(), Box<dyn Error>> {
 	let mut make_file = OpenOptions::new()
 		.create(true)
 		.append(true)
 		.open("./target/generated_code/dummy_classes.txt")
 		.expect("Failed to open make file");
 
-	for &data_type in &types {
+	for data_type in types.iter() {
 		make_file
 			.write_all(generate_type_class_from_name(data_type).as_bytes())
 			.expect("Failed to write make method");
@@ -366,9 +366,7 @@ fn get_return_type_string(return_type_arg: Option<&RustFnArg>) -> Result<String,
 						Type::Path(ref x) => x,
 						_ => return Err("fixme".into()),
 					};
-					Ok(primitive_match(&type_path)
-						.unwrap_or("MemorySegment")
-						.into())
+					Ok(primitive_match(type_path).unwrap_or("MemorySegment").into())
 				}
 				ArgKind::Boxed | ArgKind::Address => {
 					// For boxed or address types, return a generic representation
@@ -382,9 +380,9 @@ fn get_return_type_string(return_type_arg: Option<&RustFnArg>) -> Result<String,
 
 fn get_raw_rust_return_type(return_type_arg: Option<&RustFnArg>) -> String {
 	// Ok(quote! { #return_type_arg.ty }.to_string())
-	let tokenstrm = quote! {return_type_arg.unwrap().ty};
-	let res = tokenstrm.to_string();
-	res
+	let ty = &return_type_arg.unwrap().ty;
+	let tokenstrm = quote! {#ty};
+	tokenstrm.to_string()
 }
 // Java code ends here
 
