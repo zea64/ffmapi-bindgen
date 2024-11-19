@@ -12,7 +12,11 @@ use syn::{parse_file, Ident, Item, ItemFn, ReturnType, Type};
 
 use proc_macro2::Span;
 
-pub fn generate_bindings(output_dir: &Path, input_file: &Path) -> Result<(), Box<dyn Error>> {
+pub fn generate_bindings(
+	output_dir: &Path,
+	input_file: &Path,
+	libpath: &Path,
+) -> Result<(), Box<dyn Error>> {
 	let file = fs::read_to_string(input_file)?;
 	let ast = parse_file(&file)?;
 
@@ -31,7 +35,7 @@ pub fn generate_bindings(output_dir: &Path, input_file: &Path) -> Result<(), Box
 		}
 	}
 
-	finalize(state)?;
+	finalize(state, libpath.to_str().unwrap())?;
 
 	write_files(output_dir)?;
 
@@ -74,7 +78,7 @@ fn process_fn(f: ItemFn, state: &mut State) -> Result<(), Box<dyn Error>> {
 
 	for arg in args.iter().chain(&return_arg) {
 		if arg.kind == ArgKind::Boxed {
-			let ty_string = canoncalize_type(&arg).unwrap();
+			let ty_string = canoncalize_type(arg).unwrap();
 			state.types.insert(ty_string);
 		}
 	}
@@ -159,7 +163,7 @@ fn maybe_primitive_to_boxed(s: &str) -> &str {
 }
 
 // The real meat and potatos: write the files.
-fn finalize(state: State) -> Result<(), Box<dyn Error>> {
+fn finalize(state: State, libname: &str) -> Result<(), Box<dyn Error>> {
 	for ty in state.types {
 		let mut path = state.path.clone();
 		path.push(format!("{}.java", &ty));
@@ -227,7 +231,7 @@ public class RustFns {{
 			var linker = Linker.nativeLinker();
 			var lib = SymbolLookup.libraryLookup("{}", Arena.global());
 "#,
-		"./libfoo.so"
+		libname
 	)?;
 
 	for method in state.methods.iter() {
@@ -330,7 +334,7 @@ public class RustFns {{
 				ArgKind::Address => unimplemented!(),
 			}
 		} else {
-			write!(&mut file, "		{};", method_call);
+			write!(&mut file, "		{};", method_call)?;
 		}
 
 		writeln!(

@@ -25,7 +25,7 @@ pub fn primitive_to_java(s: &str) -> Option<&'static str> {
 		"i8" | "u8" => Some("byte"),
 		"i16" | "u16" => Some("short"),
 		"i32" | "u32" | "char" => Some("int"),
-		"i64" | "u64" => Some("long"),
+		"i64" | "u64" | "isize" | "usize" => Some("long"),
 		"f32" => Some("float"),
 		"f64" => Some("double"),
 		_ => None,
