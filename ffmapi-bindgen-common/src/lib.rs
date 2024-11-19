@@ -20,6 +20,18 @@ pub fn primitive_match(path: &TypePath) -> Option<&'static str> {
 	}
 }
 
+pub fn primitive_to_java(s: &str) -> Option<&'static str> {
+	match s {
+		"i8" | "u8" => Some("byte"),
+		"i16" | "u16" => Some("short"),
+		"i32" | "u32" | "char" => Some("int"),
+		"i64" | "u64" => Some("long"),
+		"f32" => Some("float"),
+		"f64" => Some("double"),
+		_ => None,
+	}
+}
+
 // Turn T into Box<T>
 pub fn boxify_type(t: Type) -> Box<Type> {
 	Box::new(Type::Path(TypePath {
