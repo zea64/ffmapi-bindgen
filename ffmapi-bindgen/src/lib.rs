@@ -323,7 +323,7 @@ public class RustFns {{
 				ArgKind::Primitive => write!(
 					&mut file,
 					"		return ({}){};",
-					primitive_to_java(&canoncalize_type(ret_type).unwrap()).unwrap(),
+					canoncalize_type(ret_type).unwrap(),
 					method_call
 				)?,
 				ArgKind::Boxed => write!(
