@@ -158,6 +158,7 @@ fn maybe_primitive_to_boxed(s: &str) -> &str {
 		"long" => "Long",
 		"float" => "Float",
 		"double" => "Double",
+		"boolean" => "Boolean",
 		_ => s,
 	}
 }

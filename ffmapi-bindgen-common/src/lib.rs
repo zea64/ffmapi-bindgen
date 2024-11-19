@@ -4,7 +4,7 @@ use proc_macro2::*;
 use syn::*;
 
 pub const PRIMITIVES: &[&str] = &[
-	"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "char",
+	"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "char", "bool",
 ];
 
 pub fn primitive_match(path: &TypePath) -> Option<&'static str> {
@@ -28,6 +28,7 @@ pub fn primitive_to_java(s: &str) -> Option<&'static str> {
 		"i64" | "u64" | "isize" | "usize" => Some("long"),
 		"f32" => Some("float"),
 		"f64" => Some("double"),
+		"bool" => Some("boolean"),
 		_ => None,
 	}
 }
