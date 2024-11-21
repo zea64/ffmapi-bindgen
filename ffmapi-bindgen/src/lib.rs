@@ -199,7 +199,7 @@ public class {0} {{
 		.write(true)
 		.open(&path)?;
 
-	write!(
+	writeln!(
 		&mut file,
 		r"import java.lang.invoke.MethodHandle;
 import java.lang.foreign.Arena;
@@ -215,6 +215,7 @@ public class RustFns {{
 		return linker.downcallHandle(addr, descriptor);
 	}}
 
+	public static SymbolLookup lib;
 "
 	)?;
 
@@ -227,10 +228,10 @@ public class RustFns {{
 	write!(
 		&mut file,
 		r#"
-		static {{
+	static {{
 		try {{
 			var linker = Linker.nativeLinker();
-			var lib = SymbolLookup.libraryLookup("{}", Arena.global());
+			lib = SymbolLookup.libraryLookup("{}", Arena.global());
 "#,
 		libname
 	)?;
