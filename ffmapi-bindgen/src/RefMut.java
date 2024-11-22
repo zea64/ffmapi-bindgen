@@ -14,9 +14,7 @@ public class RefMut<T> implements Closeable {
 	}
 	
 	T get() {
-		var ret = this.val.val;
-		this.close();
-		return ret;
+		return this.val.val;
 	}
 	
 	public void close() {
