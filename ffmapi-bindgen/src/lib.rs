@@ -313,7 +313,13 @@ public class RustFns {{
 
 			match arg.kind {
 				ArgKind::Primitive => write!(&mut method_call, "{}", arg.ident)?,
-				ArgKind::Address => write!(&mut method_call, "{}.get().value", arg.ident)?,
+				ArgKind::Address => {
+					if matches!(arg.ty, Type::Ptr(_)) {
+						write!(&mut method_call, "{}", arg.ident)?
+					} else {
+						write!(&mut method_call, "{}.get().value", arg.ident)?
+					}
+				}
 				ArgKind::Boxed => write!(&mut method_call, "{}.value", arg.ident)?,
 			};
 		}
@@ -333,7 +339,7 @@ public class RustFns {{
 					canoncalize_type(ret_type).unwrap(),
 					method_call
 				)?,
-				ArgKind::Address => unimplemented!(),
+				ArgKind::Address => write!(&mut file, "		return (MemorySegment){};", method_call)?,
 			}
 		} else {
 			write!(&mut file, "		{};", method_call)?;
